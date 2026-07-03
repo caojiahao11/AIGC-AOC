@@ -75,6 +75,25 @@ model AnalysisReport {
   costTokens   Int          @default(0)
 
   createdAt    DateTime     @default(now())
+
+  feedbacks    IssueFeedback[]
+}
+
+// 报告里某一条 issue 的一次反馈,或整份报告的一次反馈(issueIndex=null)
+// missing 类型:代表编辑觉得"漏了",note 里写他觉得应该指出的问题
+model IssueFeedback {
+  id         String         @id @default(cuid())
+  reportId   String
+  report     AnalysisReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  issueIndex Int?           // 对应 report.issues[].issues[issueIndex],null 表示"整份报告级"或"missing"
+  vote       String         // useful | useless | missing
+  note       String?        @db.Text
+
+  createdAt  DateTime       @default(now())
+
+  @@index([reportId])
+  @@index([vote])
 }
 
 model PromptTemplate {

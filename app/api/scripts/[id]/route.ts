@@ -29,6 +29,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
           errorMessage: task.errorMessage,
           startedAt: task.startedAt,
           completedAt: task.completedAt,
+          reportId: task.report?.id ?? null,
           report: task.report ? (task.report.issues as any) : null
         }
       : null

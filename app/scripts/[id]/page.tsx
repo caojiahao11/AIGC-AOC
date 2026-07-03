@@ -15,6 +15,7 @@ import {
   Filter,
   Quote
 } from "lucide-react";
+import { IssueFeedbackButtons } from "@/components/IssueFeedback";
 
 type Issue = {
   category: string;
@@ -42,6 +43,7 @@ type ScriptDetail = {
     id: string;
     status: string;
     errorMessage: string | null;
+    reportId: string | null;
     report: Report | null;
   } | null;
 };
@@ -346,6 +348,10 @@ export default function ScriptDetailPage() {
                           <span className="text-muted-foreground">{issue.suggestion}</span>
                         </div>
                       </div>
+
+                      {task?.reportId && (
+                        <IssueFeedbackButtons reportId={task.reportId} issueIndex={i} />
+                      )}
                     </li>
                   );
                 })}
