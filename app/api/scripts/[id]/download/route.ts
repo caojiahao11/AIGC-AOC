@@ -3,6 +3,8 @@ import { Readable } from "stream";
 import { prisma } from "@/lib/db";
 import { createReadStream, getFileStats, fileExists, isPathWithinStorage } from "@/lib/storage";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

@@ -5,6 +5,9 @@ import { prisma } from "@/lib/db";
 import { parseWordBuffer } from "@/lib/parser/word";
 import { analysisQueue } from "@/lib/queue";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 const MAX_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? "50");
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
