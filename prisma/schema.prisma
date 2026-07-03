@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  feishuUserId String?  @unique
+  avatarUrl    String?
+  role         String   @default("editor")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  scripts      Script[]
+  tasks        AnalysisTask[]
+}
+
+model Script {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+
+  title         String
+  source        String   @default("upload")
+  filePath      String
+  wordCount     Int      @default(0)
+  parsedContent Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tasks         AnalysisTask[]
+
+  @@index([userId])
+}
+
+model AnalysisTask {
+  id            String    @id @default(cuid())
+  scriptId      String
+  script        Script    @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+
+  type          String
+  status        String    @default("pending")
+  promptVersion String
+  errorMessage  String?
+
+  createdAt     DateTime  @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  report        AnalysisReport?
+
+  @@index([scriptId])
+  @@index([status])
+}
+
+model AnalysisReport {
+  id           String       @id @default(cuid())
+  taskId       String       @unique
+  task         AnalysisTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  summary      String
+  overallScore Int?
+  issues       Json
+  rawResponse  String       @db.Text
+  costTokens   Int          @default(0)
+
+  createdAt    DateTime     @default(now())
+}
+
+model PromptTemplate {
+  id        String   @id @default(cuid())
+  type      String
+  version   String
+  content   String   @db.Text
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([type, version])
+  @@index([type, isActive])
+}
