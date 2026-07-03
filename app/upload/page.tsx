@@ -42,7 +42,11 @@ export default function UploadPage() {
     e.preventDefault();
     setDragOver(false);
     const dropped = e.dataTransfer.files[0] ?? null;
-    handleFile(dropped);
+    setError(null);
+    if (!dropped) { setFile(null); return; }
+    const err = validateFile(dropped);
+    if (err) { setError(err); setFile(null); return; }
+    setFile(dropped);
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
