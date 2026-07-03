@@ -104,10 +104,14 @@ export default function UploadPage() {
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Upload className="h-5 w-5" />
               </div>
-              <p className="mt-3 text-sm font-medium">
-                拖拽文件到此处，或{" "}
-                <label className="cursor-pointer text-primary hover:underline">
-                  点击选择
+              <p className="mt-3 text-sm font-medium">把 Word 剧本拖到这里</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                不会拖拽也没关系，直接点击下面按钮选择文件
+              </p>
+              <div className="mt-4">
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98]">
+                  <Upload className="h-4 w-4" />
+                  选择 Word 文件
                   <input
                     type="file"
                     accept=".docx"
@@ -115,8 +119,8 @@ export default function UploadPage() {
                     onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
                   />
                 </label>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">仅支持 .docx 格式</p>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">仅支持 .docx 格式，最大 {MAX_SIZE_MB}MB</p>
             </>
           ) : (
             <div className="flex items-center justify-center gap-3">
