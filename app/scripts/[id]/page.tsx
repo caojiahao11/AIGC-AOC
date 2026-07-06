@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -125,6 +125,29 @@ export default function ScriptDetailPage() {
   const [filterSeverity, setFilterSeverity] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [downloadingPng, setDownloadingPng] = useState(false);
+  const printableRef = useRef<HTMLDivElement>(null);
+
+  async function downloadCharacterPng(title: string) {
+    if (!printableRef.current) return;
+    setDownloadingPng(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const canvas = await html2canvas(printableRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true
+      });
+      const link = document.createElement("a");
+      link.download = `${title.replace(/[\\/:*?"<>|]/g, "_")}-人物出场表.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "截图失败");
+    } finally {
+      setDownloadingPng(false);
+    }
+  }
 
   useEffect(() => {
     let stop = false;
@@ -316,13 +339,15 @@ export default function ScriptDetailPage() {
                   <Download className="h-4 w-4" />
                   下载 xlsx
                 </a>
-                <a
-                  href={`/api/scripts/${data.id}/characters/image`}
-                  className="inline-flex items-center gap-2 rounded-full border bg-transparent px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+                <button
+                  type="button"
+                  onClick={() => downloadCharacterPng(data.title)}
+                  disabled={downloadingPng}
+                  className="inline-flex items-center gap-2 rounded-full border bg-transparent px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50"
                 >
-                  <ImageIcon className="h-4 w-4" />
-                  下载表格截图
-                </a>
+                  {downloadingPng ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                  {downloadingPng ? "生成中…" : "下载表格截图"}
+                </button>
               </div>
             </div>
             <div className="mt-5 overflow-x-auto rounded-lg border bg-background/40">
@@ -350,6 +375,46 @@ export default function ScriptDetailPage() {
               </table>
             </div>
           </section>
+          {/* 截图专用: 白底纯净版, 屏幕上位于视口外 */}
+          <div style={{ position: "fixed", top: 0, left: -99999, zIndex: -1, pointerEvents: "none" }} aria-hidden>
+            <div
+              ref={printableRef}
+              style={{
+                width: 960,
+                padding: 32,
+                background: "#ffffff",
+                color: "#1f2937",
+                fontFamily: '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif'
+              }}
+            >
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 6 }}>{data.title}</div>
+              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>
+                首次出场人物介绍表 · 共 {characterReport.characters.length} 位角色
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
+                <thead>
+                  <tr style={{ background: "#1e293b", color: "#f8fafc" }}>
+                    <th style={{ padding: "12px 14px", fontWeight: 600, textAlign: "left", fontSize: 13, width: 42 }}>#</th>
+                    <th style={{ padding: "12px 14px", fontWeight: 600, textAlign: "left", fontSize: 13 }}>角色名</th>
+                    <th style={{ padding: "12px 14px", fontWeight: 600, textAlign: "left", fontSize: 13 }}>身份</th>
+                    <th style={{ padding: "12px 14px", fontWeight: 600, textAlign: "left", fontSize: 13 }}>英文版身份</th>
+                    <th style={{ padding: "12px 14px", fontWeight: 600, textAlign: "left", fontSize: 13, width: 100 }}>首次出现集数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {characterReport.characters.map((c, i) => (
+                    <tr key={c.name + "-print-" + i} style={{ background: i % 2 ? "#f9fafb" : "#ffffff" }}>
+                      <td style={{ padding: "11px 14px", borderBottom: "1px solid #e5e7eb", color: "#9ca3af", textAlign: "center" }}>{i + 1}</td>
+                      <td style={{ padding: "11px 14px", borderBottom: "1px solid #e5e7eb", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>{c.name}</td>
+                      <td style={{ padding: "11px 14px", borderBottom: "1px solid #e5e7eb" }}>{c.identity}</td>
+                      <td style={{ padding: "11px 14px", borderBottom: "1px solid #e5e7eb" }}>{c.identityEn}</td>
+                      <td style={{ padding: "11px 14px", borderBottom: "1px solid #e5e7eb", color: "#6366f1", textAlign: "center", whiteSpace: "nowrap" }}>{c.firstEpisode}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
