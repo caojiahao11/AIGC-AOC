@@ -126,7 +126,7 @@ function runDeploy() {
     },
     {
       name: "重启服务",
-      cmd: `cd ${PROJECT_DIR} && docker compose -f ${COMPOSE_FILE} up -d --remove-orphans 2>&1`,
+      cmd: `cd ${PROJECT_DIR} && docker compose --env-file .env.production -f ${COMPOSE_FILE} up -d --remove-orphans 2>&1`,
     },
     {
       name: "清理旧镜像",
