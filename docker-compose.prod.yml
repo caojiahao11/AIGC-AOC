@@ -28,7 +28,10 @@ services:
       retries: 5
 
   migrator:
-    image: ccr.ccs.tencentyun.com/script-review/migrator:latest
+    build:
+      context: .
+      target: migrator
+    image: script-review-migrator:latest
     container_name: sr-migrator
     depends_on:
       postgres:
@@ -38,7 +41,10 @@ services:
     restart: "no"
 
   app:
-    image: ccr.ccs.tencentyun.com/script-review/app:latest
+    build:
+      context: .
+      target: app
+    image: script-review-app:latest
     container_name: sr-app
     restart: unless-stopped
     depends_on:
@@ -65,7 +71,10 @@ services:
       - scripts-data:/data/scripts
 
   worker:
-    image: ccr.ccs.tencentyun.com/script-review/worker:latest
+    build:
+      context: .
+      target: worker
+    image: script-review-worker:latest
     container_name: sr-worker
     restart: unless-stopped
     depends_on:
