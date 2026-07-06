@@ -1,0 +1,68 @@
+version: '1.0'
+name: deploy-tcr
+displayName: '构建镜像推送到 TCR'
+
+# 只在 main 分支 push 时触发
+triggers:
+  push:
+    branches:
+      precise:
+        - main
+
+stages:
+  - stage:
+      name: build-and-push
+      displayName: '构建 Docker 镜像并推送到 TCR'
+      strategy: naturally
+      trigger: auto
+      steps:
+        - step: shell@alpine3.18
+          name: build_and_push
+          displayName: '构建并推送镜像'
+          commands: |
+            echo "===== 开始构建 Docker 镜像 ====="
+            echo "分支: ${GITEE_BRANCH}"
+            echo "提交: ${GITEE_COMMIT}"
+            echo "触发人: ${GITEE_PIPELINE_TRIGGER_USER}"
+            
+            # 安装 Docker CLI
+            apk add --no-cache docker-cli
+            
+            # 登录腾讯云 TCR
+            echo "$TCR_PASSWORD" | docker login ccr.ccs.tencentyun.com --username "$TCR_USERNAME" --password-stdin
+            
+            # 设置镜像标签（使用 commit 前 8 位）
+            TAG="${GITEE_COMMIT:0:8}"
+            echo "镜像标签: ${TAG}"
+            
+            # 构建 app 镜像
+            echo "[1/3] 构建 app 镜像..."
+            docker build --target app \
+              -t ccr.ccs.tencentyun.com/script-review/app:${TAG} \
+              -t ccr.ccs.tencentyun.com/script-review/app:latest \
+              .
+            
+            # 构建 worker 镜像
+            echo "[2/3] 构建 worker 镜像..."
+            docker build --target worker \
+              -t ccr.ccs.tencentyun.com/script-review/worker:${TAG} \
+              -t ccr.ccs.tencentyun.com/script-review/worker:latest \
+              .
+            
+            # 构建 migrator 镜像
+            echo "[3/3] 构建 migrator 镜像..."
+            docker build --target migrator \
+              -t ccr.ccs.tencentyun.com/script-review/migrator:${TAG} \
+              -t ccr.ccs.tencentyun.com/script-review/migrator:latest \
+              .
+            
+            # 推送所有镜像到 TCR
+            echo "===== 推送镜像到 TCR ====="
+            docker push ccr.ccs.tencentyun.com/script-review/app:${TAG} && \
+            docker push ccr.ccs.tencentyun.com/script-review/app:latest && \
+            docker push ccr.ccs.tencentyun.com/script-review/worker:${TAG} && \
+            docker push ccr.ccs.tencentyun.com/script-review/worker:latest && \
+            docker push ccr.ccs.tencentyun.com/script-review/migrator:${TAG} && \
+            docker push ccr.ccs.tencentyun.com/script-review/migrator:latest
+            
+            echo "===== 构建推送完成 ====="
