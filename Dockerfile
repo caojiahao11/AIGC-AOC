@@ -2,13 +2,18 @@ FROM node:20-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV PUPPETEER_CACHE_DIR=/pptr-cache
+# 国内加速：使用阿里云镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+RUN sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates wget && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app
 
 FROM base AS deps
+# 国内 npm 镜像
+ENV PNPM_REGISTRY=https://mirrors.tencent.com/npm/
 COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --registry=$PNPM_REGISTRY
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
