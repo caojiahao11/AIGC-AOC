@@ -404,7 +404,7 @@ JSON 结构如下：
 
   await prisma.analysisTask.update({
     where: { id: taskId },
-    data: { status: "completed", completedAt: new Date() }
+    data: { status: "completed", errorMessage: null, completedAt: new Date() }
   });
 }
 

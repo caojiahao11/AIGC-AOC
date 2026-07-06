@@ -14,7 +14,9 @@ export async function POST(_: NextRequest, { params }: { params: { id: string } 
   }
 
   // 根据 kind 决定任务类型和 Prompt
-  const isStoryboard = script.kind === "storyboard";
+  // 兼容 kind=null 的旧分镜：parsedContent 中有 characters 数组也视为分镜
+  const parsed = script.parsedContent as { characters?: any[] } | null;
+  const isStoryboard = script.kind === "storyboard" || (!script.kind && Array.isArray(parsed?.characters));
   const taskType = isStoryboard ? "character_extract" : "script_review";
 
   const template = await prisma.promptTemplate.findFirst({

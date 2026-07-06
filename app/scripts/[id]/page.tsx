@@ -186,21 +186,23 @@ export default function ScriptDetailPage() {
     }
   }
 
-  const categories = scriptReport
-    ? Array.from(new Set(scriptReport.issues.map((i) => i.category))).sort(
+  const issuesArray = Array.isArray(scriptReport?.issues) ? scriptReport.issues : [];
+
+  const categories = issuesArray.length
+    ? Array.from(new Set(issuesArray.map((i) => i.category))).sort(
         (a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b)
       )
     : [];
 
-  const filteredIssues = scriptReport?.issues.filter((i) => {
+  const filteredIssues = issuesArray.filter((i) => {
     if (filterSeverity && i.severity !== filterSeverity) return false;
     if (filterCategory && i.category !== filterCategory) return false;
     return true;
   });
 
-  const highCount = scriptReport?.issues.filter((i) => i.severity === "high").length ?? 0;
-  const mediumCount = scriptReport?.issues.filter((i) => i.severity === "medium").length ?? 0;
-  const lowCount = scriptReport?.issues.filter((i) => i.severity === "low").length ?? 0;
+  const highCount = issuesArray.filter((i) => i.severity === "high").length;
+  const mediumCount = issuesArray.filter((i) => i.severity === "medium").length;
+  const lowCount = issuesArray.filter((i) => i.severity === "low").length;
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-8">
