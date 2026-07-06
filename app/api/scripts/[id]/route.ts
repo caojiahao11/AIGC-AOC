@@ -20,6 +20,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   return NextResponse.json({
     id: script.id,
     title: script.title,
+    kind: script.kind,
     wordCount: script.wordCount,
     createdAt: script.createdAt,
     task: task

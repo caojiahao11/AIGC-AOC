@@ -13,7 +13,11 @@ import {
   AlertTriangle,
   Lightbulb,
   Filter,
-  Quote
+  Quote,
+  Download,
+  Image as ImageIcon,
+  Film,
+  BookText
 } from "lucide-react";
 import { IssueFeedbackButtons } from "@/components/IssueFeedback";
 
@@ -29,14 +33,37 @@ type Issue = {
 type Report = {
   summary: string;
   overallScore: number;
+  verdict?: string;
+  deductionNotes?: string[];
   scoreBreakdown: Record<string, number>;
+  problemBreakdown?: Record<string, string[]>;
   issues: Issue[];
+  revisions?: Revision[];
+  adaptedText?: string;
   highlights: string[];
 };
+
+type Revision = {
+  sceneId: string;
+  problem: string;
+  reason: string;
+  originalText: string;
+  revisedText: string;
+};
+
+type CharacterRow = {
+  name: string;
+  identity: string;
+  identityEn: string;
+  firstEpisode: string;
+};
+
+type CharacterReport = { characters: CharacterRow[] };
 
 type ScriptDetail = {
   id: string;
   title: string;
+  kind?: "script" | "storyboard";
   wordCount: number;
   createdAt: string;
   task: {
@@ -44,7 +71,7 @@ type ScriptDetail = {
     status: string;
     errorMessage: string | null;
     reportId: string | null;
-    report: Report | null;
+    report: Report | CharacterReport | null;
   } | null;
 };
 
@@ -54,10 +81,14 @@ const CATEGORY_LABEL: Record<string, string> = {
   scene: "场景与画面",
   dialogue: "对白",
   logic: "逻辑与设定",
-  ai_friendly: "AI 分镜友好度"
+  ai_friendly: "AI 分镜友好度",
+  fatalRisk: "雷区风险",
+  formatScene: "格式与场景",
+  culture: "文化审查",
+  paceInfo: "节奏与信息"
 };
 
-const CATEGORY_ORDER = ["structure", "character", "scene", "dialogue", "logic", "ai_friendly"];
+const CATEGORY_ORDER = ["fatalRisk", "logic", "formatScene", "culture", "dialogue", "paceInfo", "structure", "character", "scene", "ai_friendly"];
 
 const SEVERITY_META: Record<string, { label: string; className: string; dot: string }> = {
   high: { label: "严重", className: "border-red-500/20 bg-red-500/5", dot: "bg-red-400" },
@@ -73,13 +104,13 @@ const STATUS_META: Record<string, { label: string; icon: React.ReactNode; classN
 };
 
 function ScoreBar({ label, score }: { label: string; score: number }) {
-  const pct = Math.min(Math.max(score * 10, 0), 100);
+  const pct = Math.min(Math.max(score, 0), 100);
   const color = pct >= 70 ? "bg-emerald-400" : pct >= 50 ? "bg-amber-400" : "bg-red-400";
   return (
     <div>
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium">{score}/10</span>
+        <span className="font-medium">{score}</span>
       </div>
       <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div className={`h-full rounded-full ${color} transition-all duration-700`} style={{ width: `${pct}%` }} />
@@ -93,6 +124,7 @@ export default function ScriptDetailPage() {
   const [data, setData] = useState<ScriptDetail | null>(null);
   const [filterSeverity, setFilterSeverity] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   useEffect(() => {
     let stop = false;
@@ -129,23 +161,46 @@ export default function ScriptDetailPage() {
   }
 
   const task = data.task;
-  const report = task?.report;
+  const isStoryboard = data.kind === "storyboard";
+  const report = task?.report as any;
+  const scriptReport: Report | null = !isStoryboard ? (report as Report) : null;
+  const characterReport: CharacterReport | null = isStoryboard ? (report as CharacterReport) : null;
+  const hasAdaptation = Boolean(scriptReport?.adaptedText || (scriptReport?.revisions && scriptReport.revisions.length > 0));
 
-  const categories = report
-    ? Array.from(new Set(report.issues.map((i) => i.category))).sort(
+  async function reanalyze() {
+    if (!data) return;
+    const scriptId = data.id;
+    setReanalyzing(true);
+    try {
+      const res = await fetch(`/api/scripts/${scriptId}/reanalyze`, { method: "POST" });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error ?? "重新分析失败");
+      }
+      const next = await fetch(`/api/scripts/${scriptId}`);
+      if (next.ok) setData(await next.json());
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "重新分析失败");
+    } finally {
+      setReanalyzing(false);
+    }
+  }
+
+  const categories = scriptReport
+    ? Array.from(new Set(scriptReport.issues.map((i) => i.category))).sort(
         (a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b)
       )
     : [];
 
-  const filteredIssues = report?.issues.filter((i) => {
+  const filteredIssues = scriptReport?.issues.filter((i) => {
     if (filterSeverity && i.severity !== filterSeverity) return false;
     if (filterCategory && i.category !== filterCategory) return false;
     return true;
   });
 
-  const highCount = report?.issues.filter((i) => i.severity === "high").length ?? 0;
-  const mediumCount = report?.issues.filter((i) => i.severity === "medium").length ?? 0;
-  const lowCount = report?.issues.filter((i) => i.severity === "low").length ?? 0;
+  const highCount = scriptReport?.issues.filter((i) => i.severity === "high").length ?? 0;
+  const mediumCount = scriptReport?.issues.filter((i) => i.severity === "medium").length ?? 0;
+  const lowCount = scriptReport?.issues.filter((i) => i.severity === "low").length ?? 0;
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-8">
@@ -160,11 +215,25 @@ export default function ScriptDetailPage() {
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{data.title}</h1>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                isStoryboard
+                  ? "border-violet-500/30 bg-violet-500/10 text-violet-300"
+                  : "border-sky-500/30 bg-sky-500/10 text-sky-300"
+              }`}
+            >
+              {isStoryboard ? <Film className="h-3 w-3" /> : <BookText className="h-3 w-3" />}
+              {isStoryboard ? "分镜" : "剧本"}
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight">{data.title}</h1>
+          </div>
           <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <FileText className="h-3.5 w-3.5" />
-              {data.wordCount.toLocaleString("zh-CN")} 字
+              {isStoryboard
+                ? `${data.wordCount.toLocaleString("zh-CN")} 行分镜`
+                : `${data.wordCount.toLocaleString("zh-CN")} 字`}
             </span>
             <span>{new Date(data.createdAt).toLocaleString("zh-CN")}</span>
           </div>
@@ -199,8 +268,87 @@ export default function ScriptDetailPage() {
         </div>
       )}
 
-      {/* 报告 */}
-      {report && (
+      {scriptReport && !hasAdaptation && (
+        <div className="mt-8 flex flex-col gap-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+            <div>
+              <div className="font-medium text-amber-400">这是一份旧结构报告</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                当前报告只有打分和问题清单，没有改编稿和修改说明。请用最新提示词重新分析一次。
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={reanalyze}
+            disabled={reanalyzing}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            {reanalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lightbulb className="h-4 w-4" />}
+            {reanalyzing ? "正在提交..." : "用最新提示词重新分析"}
+          </button>
+        </div>
+      )}
+
+      {/* 分镜:人物出场表 */}
+      {isStoryboard && characterReport && characterReport.characters && characterReport.characters.length > 0 && (
+        <div className="mt-8 space-y-6">
+          <section className="rounded-xl border bg-card p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">首次出场人物表</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  从分镜表识别到 <span className="text-primary font-medium">{characterReport.characters.length}</span> 位角色
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={`/api/scripts/${data.id}/characters/xlsx`}
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:shadow-primary/30 hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <Download className="h-4 w-4" />
+                  下载 xlsx
+                </a>
+                <a
+                  href={`/api/scripts/${data.id}/characters/image`}
+                  className="inline-flex items-center gap-2 rounded-full border bg-transparent px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  下载表格截图
+                </a>
+              </div>
+            </div>
+            <div className="mt-5 overflow-x-auto rounded-lg border bg-background/40">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-2 w-12 text-center">#</th>
+                    <th className="px-3 py-2">角色名</th>
+                    <th className="px-3 py-2">身份</th>
+                    <th className="px-3 py-2">英文版身份</th>
+                    <th className="px-3 py-2 w-24 text-center">首次出现集数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {characterReport.characters.map((c, i) => (
+                    <tr key={c.name + i} className="border-t hover:bg-muted/20">
+                      <td className="px-3 py-2 text-center text-muted-foreground">{i + 1}</td>
+                      <td className="px-3 py-2 font-medium">{c.name}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{c.identity}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{c.identityEn}</td>
+                      <td className="px-3 py-2 text-center text-primary">{c.firstEpisode}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 剧本诊断报告 */}
+      {!isStoryboard && scriptReport && (
         <div className="mt-8 space-y-8">
           {/* 总评 + 分数 */}
           <section className="rounded-xl border bg-card p-6">
@@ -208,35 +356,137 @@ export default function ScriptDetailPage() {
               {/* 总分 */}
               <div className="flex shrink-0 flex-col items-center justify-center rounded-xl bg-primary/5 p-6 sm:w-40">
                 <div className="text-5xl font-bold tracking-tight text-primary">
-                  {report.overallScore}
+                  {scriptReport.overallScore}
                 </div>
-                <div className="mt-1 text-sm text-muted-foreground">总分 / 10</div>
+                <div className="mt-1 text-sm text-muted-foreground">总分 / 100</div>
                 <div
                   className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    report.overallScore >= 7
+                    scriptReport.overallScore >= 80
                       ? "bg-emerald-500/10 text-emerald-400"
-                      : report.overallScore >= 5
+                      : scriptReport.overallScore >= 60
                         ? "bg-amber-500/10 text-amber-400"
                         : "bg-red-500/10 text-red-400"
                   }`}
                 >
-                  {report.overallScore >= 7 ? "优秀" : report.overallScore >= 5 ? "良好" : "需改进"}
+                  {scriptReport.verdict ?? (scriptReport.overallScore >= 80 ? "优秀可拍" : scriptReport.overallScore >= 60 ? "勉强及格" : "不通过")}
                 </div>
               </div>
 
               <div className="flex-1 space-y-4">
                 <div>
                   <div className="text-sm font-medium">总评</div>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{report.summary}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{scriptReport.summary}</p>
                 </div>
+                {scriptReport.deductionNotes && scriptReport.deductionNotes.length > 0 && (
+                  <div>
+                    <div className="text-sm font-medium">扣分说明</div>
+                    <ul className="mt-1.5 space-y-1 text-sm text-muted-foreground">
+                      {scriptReport.deductionNotes.map((note, i) => (
+                        <li key={i} className="flex gap-2">
+                          <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                          {note}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {CATEGORY_ORDER.filter((k) => report.scoreBreakdown[k] !== undefined).map((k) => (
-                    <ScoreBar key={k} label={CATEGORY_LABEL[k] ?? k} score={report.scoreBreakdown[k]} />
+                  {CATEGORY_ORDER.filter((k) => scriptReport.scoreBreakdown[k] !== undefined).map((k) => (
+                    <ScoreBar key={k} label={CATEGORY_LABEL[k] ?? k} score={scriptReport.scoreBreakdown[k]} />
                   ))}
                 </div>
               </div>
             </div>
           </section>
+
+          {/* 问题分类 */}
+          {scriptReport.problemBreakdown && Object.entries(scriptReport.problemBreakdown).some(([, items]) => Array.isArray(items) && items.length > 0) && (
+            <section className="rounded-xl border bg-card p-6">
+              <h2 className="text-lg font-semibold">问题分类</h2>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {Object.entries(scriptReport.problemBreakdown).map(([title, items]) => {
+                  if (!Array.isArray(items) || items.length === 0) return null;
+                  return (
+                    <div key={title} className="rounded-lg border bg-background/40 p-4">
+                      <div className="text-sm font-medium">{title}</div>
+                      <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+                        {items.map((item, i) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* 改编稿 */}
+          {scriptReport.adaptedText && (
+            <section className="rounded-xl border bg-card p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">改编稿</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    根据质检问题生成的可交付改编版本
+                  </p>
+                </div>
+                <a
+                  href={`/api/scripts/${data.id}/adaptation/download`}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:shadow-primary/30 hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <Download className="h-4 w-4" />
+                  下载改编稿
+                </a>
+              </div>
+              <pre className="mt-4 max-h-[520px] overflow-auto whitespace-pre-wrap rounded-lg border bg-black/20 p-4 text-sm leading-relaxed text-muted-foreground">
+                {scriptReport.adaptedText}
+              </pre>
+            </section>
+          )}
+
+          {/* 修改说明 */}
+          {scriptReport.revisions && scriptReport.revisions.length > 0 && (
+            <section>
+              <h2 className="mb-4 text-lg font-semibold">修改说明</h2>
+              <ul className="space-y-4">
+                {scriptReport.revisions.map((revision, i) => (
+                  <li key={i} className="rounded-xl border bg-card p-5">
+                    <div className="text-sm font-semibold">{revision.sceneId || `修改 ${i + 1}`}</div>
+                    <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+                      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                        <div className="mb-1 font-medium text-red-400">原文问题</div>
+                        <p className="text-muted-foreground">{revision.problem}</p>
+                      </div>
+                      <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                        <div className="mb-1 font-medium text-amber-400">改编原因</div>
+                        <p className="text-muted-foreground">{revision.reason}</p>
+                      </div>
+                    </div>
+                    {revision.originalText && (
+                      <div className="mt-3">
+                        <div className="mb-1 text-xs font-medium text-muted-foreground">原文</div>
+                        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs leading-relaxed text-muted-foreground">
+                          {revision.originalText}
+                        </pre>
+                      </div>
+                    )}
+                    {revision.revisedText && (
+                      <div className="mt-3">
+                        <div className="mb-1 text-xs font-medium text-emerald-400">改编后</div>
+                        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs leading-relaxed">
+                          {revision.revisedText}
+                        </pre>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {/* 问题清单 */}
           <section>
@@ -244,7 +494,7 @@ export default function ScriptDetailPage() {
               <h2 className="text-lg font-semibold">
                 问题清单
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  共 {report.issues.length} 条
+                  共 {scriptReport.issues.length} 条
                   {highCount > 0 && (
                     <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
@@ -364,14 +614,14 @@ export default function ScriptDetailPage() {
           </section>
 
           {/* 值得保留 */}
-          {report.highlights && report.highlights.length > 0 && (
+          {scriptReport.highlights && scriptReport.highlights.length > 0 && (
             <section className="rounded-xl border bg-emerald-500/5 p-6">
               <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-emerald-400">
                 <CheckCircle2 className="h-5 w-5" />
                 值得保留
               </h2>
               <ul className="space-y-2">
-                {report.highlights.map((h, i) => (
+                {scriptReport.highlights.map((h, i) => (
                   <li key={i} className="flex gap-2 text-sm leading-relaxed">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
                     {h}

@@ -9,24 +9,54 @@ import {
   X,
   AlertTriangle,
   ArrowLeft,
-  Loader2
+  Loader2,
+  BookText,
+  Film
 } from "lucide-react";
 
 const MAX_SIZE_MB = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ?? "50");
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
+type Kind = "script" | "storyboard";
+
+const KIND_META: Record<Kind, {
+  label: string;
+  desc: string;
+  ext: string;
+  api: string;
+  icon: React.ReactNode;
+}> = {
+  script: {
+    label: "剧本诊断",
+    desc: "上传 Word 剧本,AI 出六维诊断报告 + 改编稿",
+    ext: ".docx",
+    api: "/api/scripts/upload",
+    icon: <BookText className="h-4 w-4" />
+  },
+  storyboard: {
+    label: "分镜人物卡",
+    desc: "上传分镜 Excel,AI 提取首次出场角色 + 身份,支持下载 xlsx / 表格截图",
+    ext: ".xlsx",
+    api: "/api/storyboards/upload",
+    icon: <Film className="h-4 w-4" />
+  }
+};
+
 export default function UploadPage() {
   const router = useRouter();
+  const [kind, setKind] = useState<Kind>("script");
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
+  const meta = KIND_META[kind];
+
   const validateFile = (f: File): string | null => {
     if (f.size > MAX_SIZE_BYTES) return `文件超过 ${MAX_SIZE_MB}MB 限制`;
     const ext = f.name.slice(f.name.lastIndexOf(".")).toLowerCase();
-    if (ext !== ".docx") return "仅支持 .docx 格式";
+    if (ext !== meta.ext) return `仅支持 ${meta.ext} 格式`;
     return null;
   };
 
@@ -42,12 +72,16 @@ export default function UploadPage() {
     e.preventDefault();
     setDragOver(false);
     const dropped = e.dataTransfer.files[0] ?? null;
+    handleFile(dropped);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind]);
+
+  function switchKind(next: Kind) {
+    if (next === kind) return;
+    setKind(next);
+    setFile(null);
     setError(null);
-    if (!dropped) { setFile(null); return; }
-    const err = validateFile(dropped);
-    if (err) { setError(err); setFile(null); return; }
-    setFile(dropped);
-  }, []);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,7 +94,7 @@ export default function UploadPage() {
     if (title) fd.append("title", title);
 
     try {
-      const res = await fetch("/api/scripts/upload", { method: "POST", body: fd });
+      const res = await fetch(meta.api, { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "上传失败");
       router.push(`/scripts/${json.scriptId}`);
@@ -80,13 +114,33 @@ export default function UploadPage() {
         返回列表
       </Link>
 
-      <h1 className="mt-6 text-2xl font-bold tracking-tight">上传剧本</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        支持 .docx 格式，文件大小不超过 {MAX_SIZE_MB}MB
-      </p>
+      <h1 className="mt-6 text-2xl font-bold tracking-tight">上传文件</h1>
+      <p className="mt-1 text-sm text-muted-foreground">{meta.desc}</p>
 
-      <form onSubmit={onSubmit} className="mt-8 space-y-5">
-        {/* 拖放区 */}
+      {/* 类型切换 */}
+      <div className="mt-6 grid grid-cols-2 gap-2 rounded-xl border bg-card p-1">
+        {(Object.keys(KIND_META) as Kind[]).map((k) => {
+          const m = KIND_META[k];
+          const active = k === kind;
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => switchKind(k)}
+              className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {m.icon}
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <form onSubmit={onSubmit} className="mt-6 space-y-5">
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
@@ -104,23 +158,28 @@ export default function UploadPage() {
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Upload className="h-5 w-5" />
               </div>
-              <p className="mt-3 text-sm font-medium">把 Word 剧本拖到这里</p>
+              <p className="mt-3 text-sm font-medium">
+                把 {meta.ext} 文件拖到这里
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                不会拖拽也没关系，直接点击下面按钮选择文件
+                不会拖拽也没关系,直接点击下面按钮选择文件
               </p>
               <div className="mt-4">
                 <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98]">
                   <Upload className="h-4 w-4" />
-                  选择 Word 文件
+                  选择 {meta.ext} 文件
                   <input
+                    key={kind}
                     type="file"
-                    accept=".docx"
+                    accept={meta.ext}
                     className="sr-only"
                     onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
                   />
                 </label>
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">仅支持 .docx 格式，最大 {MAX_SIZE_MB}MB</p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                仅支持 {meta.ext},最大 {MAX_SIZE_MB}MB
+              </p>
             </>
           ) : (
             <div className="flex items-center justify-center gap-3">
@@ -142,19 +201,17 @@ export default function UploadPage() {
           )}
         </div>
 
-        {/* 标题 */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium">剧本标题（可选）</label>
+          <label className="mb-1.5 block text-sm font-medium">标题(可选)</label>
           <input
             className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none ring-offset-background transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="如：第 3 集 第一版"
+            placeholder={kind === "script" ? "如:第 3 集 第一版" : "如:项目 X 分镜 v1"}
           />
           <p className="mt-1 text-xs text-muted-foreground">留空将使用文件名作为标题</p>
         </div>
 
-        {/* 错误 */}
         {error && (
           <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-400">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -162,7 +219,6 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* 提交 */}
         <button
           type="submit"
           disabled={!file || loading}

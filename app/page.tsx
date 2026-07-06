@@ -6,7 +6,14 @@ async function getScripts() {
   return prisma.script.findMany({
     orderBy: { createdAt: "desc" },
     take: 50,
-    include: { tasks: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } } }
+    select: {
+      id: true,
+      title: true,
+      kind: true,
+      wordCount: true,
+      createdAt: true,
+      tasks: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } }
+    }
   });
 }
 
@@ -116,6 +123,7 @@ export default async function HomePage() {
           <div className="grid gap-3">
             {scripts.map((s) => {
               const meta = STATUS_META[s.tasks[0]?.status ?? "none"];
+              const isStoryboard = s.kind === "storyboard";
               return (
                 <Link
                   key={s.id}
@@ -123,11 +131,26 @@ export default async function HomePage() {
                   className="group flex items-center justify-between rounded-xl border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-medium group-hover:text-primary transition-colors">
-                      {s.title}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          isStoryboard
+                            ? "border-violet-500/30 bg-violet-500/10 text-violet-300"
+                            : "border-sky-500/30 bg-sky-500/10 text-sky-300"
+                        }`}
+                      >
+                        {isStoryboard ? "分镜" : "剧本"}
+                      </span>
+                      <div className="truncate font-medium group-hover:text-primary transition-colors">
+                        {s.title}
+                      </div>
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{s.wordCount.toLocaleString("zh-CN")} 字</span>
+                      <span>
+                        {isStoryboard
+                          ? `${s.wordCount.toLocaleString("zh-CN")} 行`
+                          : `${s.wordCount.toLocaleString("zh-CN")} 字`}
+                      </span>
                       <span>·</span>
                       <span>{new Date(s.createdAt).toLocaleDateString("zh-CN")}</span>
                     </div>

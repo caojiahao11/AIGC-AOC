@@ -16,6 +16,8 @@ type Prompt = {
 
 const TYPE_LABEL: Record<string, string> = {
   script_review: "剧本诊断",
+  script_adaptation: "剧本改编",
+  character_extract: "分镜人物卡",
   character_consistency: "分镜人物一致性",
   storyboard_flow: "分镜流畅度",
   prop_analysis: "人物-道具解析"
