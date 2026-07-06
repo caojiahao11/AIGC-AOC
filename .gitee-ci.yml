@@ -1,0 +1,44 @@
+# Gitee CI 自动构建并推送到腾讯云 TCR
+# 每次 push 到 main 分支时触发
+
+stages:
+  - build
+  - push
+
+variables:
+  TCR_REGISTRY: "ccr.ccs.tencentyun.com"
+  NAMESPACE: "script-review"
+  IMAGE_PREFIX: "$TCR_REGISTRY/$NAMESPACE"
+
+build-images:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    # 登录 TCR
+    - echo "$TCR_PASSWORD" | docker login $TCR_REGISTRY --username="$TCR_USERNAME" --password-stdin
+    # 构建 app
+    - docker build --target app -t $IMAGE_PREFIX/app:$CI_COMMIT_SHA -t $IMAGE_PREFIX/app:latest .
+    # 构建 worker
+    - docker build --target worker -t $IMAGE_PREFIX/worker:$CI_COMMIT_SHA -t $IMAGE_PREFIX/worker:latest .
+    # 构建 migrator
+    - docker build --target migrator -t $IMAGE_PREFIX/migrator:$CI_COMMIT_SHA -t $IMAGE_PREFIX/migrator:latest .
+  only:
+    - main
+
+push-images:
+  stage: push
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - echo "$TCR_PASSWORD" | docker login $TCR_REGISTRY --username="$TCR_USERNAME" --password-stdin
+    - docker push $IMAGE_PREFIX/app:$CI_COMMIT_SHA
+    - docker push $IMAGE_PREFIX/app:latest
+    - docker push $IMAGE_PREFIX/worker:$CI_COMMIT_SHA
+    - docker push $IMAGE_PREFIX/worker:latest
+    - docker push $IMAGE_PREFIX/migrator:$CI_COMMIT_SHA
+    - docker push $IMAGE_PREFIX/migrator:latest
+  only:
+    - main

@@ -9,7 +9,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    # 不对外暴露端口,只在 docker 网络内通信
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
@@ -29,9 +28,7 @@ services:
       retries: 5
 
   migrator:
-    build:
-      context: .
-      target: migrator
+    image: ccr.ccs.tencentyun.com/script-review/migrator:latest
     container_name: sr-migrator
     depends_on:
       postgres:
@@ -41,9 +38,7 @@ services:
     restart: "no"
 
   app:
-    build:
-      context: .
-      target: app
+    image: ccr.ccs.tencentyun.com/script-review/app:latest
     container_name: sr-app
     restart: unless-stopped
     depends_on:
@@ -70,9 +65,7 @@ services:
       - scripts-data:/data/scripts
 
   worker:
-    build:
-      context: .
-      target: worker
+    image: ccr.ccs.tencentyun.com/script-review/worker:latest
     container_name: sr-worker
     restart: unless-stopped
     depends_on:

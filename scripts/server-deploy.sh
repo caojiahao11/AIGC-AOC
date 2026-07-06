@@ -8,10 +8,10 @@ set -e
 
 # ===== 必填：服务器连接信息 =====
 SERVER_IP="43.142.246.168"      # 服务器 IP
-SERVER_USER="root"               # SSH 用户名（通常是 root 或 ubuntu）
+SERVER_USER="ubuntu"
 # 以下二选一：
 SSH_PASSWORD=""                  # SSH 密码（如果用密码登录）
-SSH_KEY_PATH=""                  # SSH 私钥路径（如 ~/.ssh/id_rsa，如果用密钥登录）
+SSH_KEY_PATH="/Users/caojiahao/Projects/Web/daitu.pem"
 
 # ===== 必填：仓库信息 =====
 REPO_URL="https://github.com/caojiahao11/AIGC-AOC.git"
