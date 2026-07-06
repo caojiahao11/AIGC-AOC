@@ -12,6 +12,8 @@ WORKDIR /app
 FROM base AS deps
 # 国内 npm 镜像
 ENV PNPM_REGISTRY=https://mirrors.tencent.com/npm/
+# 国内 puppeteer chromium 镜像
+ENV PUPPETEER_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/chrome-for-testing
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile --registry=$PNPM_REGISTRY
 
