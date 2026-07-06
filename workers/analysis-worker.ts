@@ -298,6 +298,7 @@ async function runCharacterExtract(taskId: string) {
 
   const parsed = task.script.parsedContent as {
     characters?: { name: string; firstChapter: string; variants: string[] }[];
+    rows?: { chapter: string; characters: string; scene: string; dialogue: string; original: string; prompt: string }[];
   } | null;
   const characters = parsed?.characters ?? [];
   if (characters.length === 0) throw new Error("分镜没有识别到角色,无法生成人物卡");
@@ -308,12 +309,32 @@ async function runCharacterExtract(taskId: string) {
     variants: c.variants
   }));
 
-  const userPrompt = `以下是从分镜表中提取的角色名单,请按 System Prompt 输出 JSON。
+  // 构建分镜场次上下文，帮助 LLM 推断角色身份
+  const rows = parsed?.rows ?? [];
+  const contextLines = rows
+    .filter((r) => r.scene || r.dialogue || r.original || r.prompt)
+    .slice(0, 80)
+    .map((r) => {
+      const parts: string[] = [];
+      if (r.chapter) parts.push(`[${r.chapter}]`);
+      if (r.characters) parts.push(`人物:${r.characters}`);
+      if (r.scene) parts.push(`场景:${r.scene}`);
+      if (r.dialogue) parts.push(`台词:${r.dialogue}`);
+      if (r.original) parts.push(`原文:${r.original}`);
+      if (r.prompt) parts.push(`提示:${r.prompt}`);
+      return parts.join(" | ");
+    })
+    .join("\n");
+
+  const userPrompt = `以下是从分镜表中提取的角色名单，以及部分场次内容。请根据场景描述、台词、原文等信息推断每个角色的真实身份，并按 System Prompt 输出 JSON。
 
 【剧本标题】${task.script.title}
 【角色数量】${input.length}
-【输入】
-${JSON.stringify(input, null, 2)}`;
+【角色名单】
+${JSON.stringify(input, null, 2)}
+
+【分镜场次参考（前80场）】
+${contextLines || "（无额外场次信息）"}`;
 
   let lastError: unknown;
   let raw = "";

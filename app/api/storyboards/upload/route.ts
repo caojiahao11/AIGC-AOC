@@ -38,8 +38,9 @@ export async function POST(request: NextRequest) {
 
     let characters: ReturnType<typeof parseStoryboardBuffer>["characters"] = [];
     let rowCount = 0;
+    let parsed: ReturnType<typeof parseStoryboardBuffer> | null = null;
     try {
-      const parsed = parseStoryboardBuffer(buffer);
+      parsed = parseStoryboardBuffer(buffer);
       characters = parsed.characters;
       rowCount = parsed.rows.length;
     } catch (e) {
@@ -55,6 +56,16 @@ export async function POST(request: NextRequest) {
       where: { type: "character_extract", isActive: true }
     });
 
+    // 截取前 120 行作为 LLM 上下文，避免 token 超限
+    const contextRows = parsed!.rows.slice(0, 120).map((r) => ({
+      chapter: r.chapter,
+      characters: r.characters,
+      scene: r.scene,
+      dialogue: r.dialogue,
+      original: r.original,
+      prompt: r.prompt
+    }));
+
     const script = await prisma.script.create({
       data: {
         userId: user.id,
@@ -63,7 +74,7 @@ export async function POST(request: NextRequest) {
         source: "upload",
         filePath,
         wordCount: rowCount,
-        parsedContent: { characters, rowCount }
+        parsedContent: { characters, rowCount, rows: contextRows }
       }
     });
 
