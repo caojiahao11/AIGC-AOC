@@ -164,7 +164,11 @@ export default function ScriptDetailPage() {
   const isStoryboard = data.kind === "storyboard";
   const report = task?.report as any;
   const scriptReport: Report | null = !isStoryboard ? (report as Report) : null;
-  const characterReport: CharacterReport | null = isStoryboard ? (report as CharacterReport) : null;
+  // Prompt 说了算：运行时检查 characters 是否为数组，不是则视为无数据
+  const characterReport: CharacterReport | null =
+    isStoryboard && report && Array.isArray(report.characters)
+      ? (report as CharacterReport)
+      : null;
   const hasAdaptation = Boolean(scriptReport?.adaptedText || (scriptReport?.revisions && scriptReport.revisions.length > 0));
 
   async function reanalyze() {

@@ -341,30 +341,8 @@ ${contextLines || "（无额外场次信息）"}`;
   let tokens = 0;
   let data: any = null;
 
-  const systemContent = `${template.content}
-
-【系统技术约束】
-你必须只输出一个可被 JSON.parse 解析的 JSON 对象，不要输出 markdown 表格，不要输出任何解释文字。
-
-JSON 结构如下：
-{
-  "characters": [
-    {
-      "name": "角色中文名（与输入完全一致）",
-      "identity": "身份/职业描述（中文）",
-      "identityEn": "Identity in English",
-      "firstEpisode": "首次出场集数或场次"
-    }
-  ]
-}
-
-字段规则：
-- characters 必须是数组。
-- name 必须与输入的角色名完全一致，不要改名。
-- identity 用中文写，简洁明了。
-- identityEn 用英文写，尽量简短。
-- firstEpisode 从分镜表的场次/集数信息中提取，不要编造。
-- 输出条目数必须与输入一致，不能漏角色。`;
+  // Prompt 完全说了算：system message 只用模板内容，不拼接任何技术约束
+  const systemContent = template.content;
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     const response = await deepseek.chat.completions.create({
@@ -376,12 +354,12 @@ JSON 结构如下：
           content:
             attempt === 1
               ? userPrompt
-              : `${userPrompt}\n\n上一次输出不是合法 JSON,请严格按格式重新输出。`
+              : `${userPrompt}\n\n上一次输出无法解析，请按你理解的格式重新输出。`
         }
       ],
       temperature: 0.2,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      response_format: { type: "json_object" }
+      max_tokens: MAX_OUTPUT_TOKENS
+      // 不强制 response_format，让 Prompt 决定输出格式
     });
 
     raw = response.choices[0]?.message.content ?? "";
@@ -389,35 +367,37 @@ JSON 结构如下：
 
     try {
       data = JSON.parse(raw);
-      if (!Array.isArray(data.characters)) throw new Error("缺少 characters 数组");
-      if (data.characters.length !== input.length) {
-        console.warn(`[character] 输出条数 ${data.characters.length} 与输入 ${input.length} 不一致`);
-      }
       break;
     } catch (err) {
       lastError = err;
-      console.warn(`[character] 第 ${attempt} 次解析失败:`, err instanceof Error ? err.message : err);
+      console.warn(`[character] 第 ${attempt} 次 JSON 解析失败，原始内容将存入 rawResponse:`, err instanceof Error ? err.message : err);
       data = null;
     }
   }
 
-  if (!data) throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  // 如果 JSON 解析成功，尝试规范化 characters 数组（但不强制）
+  let issuesData: any = data;
+  if (data && Array.isArray(data.characters)) {
+    const byName = new Map(input.map((c) => [c.name, c.firstChapter]));
+    issuesData = {
+      ...data,
+      characters: data.characters.map((c: any) => ({
+        name: c.name ?? "",
+        identity: c.identity ?? "",
+        identityEn: c.identityEn ?? "",
+        firstEpisode: c.firstEpisode ?? byName.get(c.name) ?? ""
+      }))
+    };
+  }
 
-  // 拼合 firstChapter 兜底(LLM 有时会漏 firstEpisode)
-  const byName = new Map(input.map((c) => [c.name, c.firstChapter]));
-  data.characters = data.characters.map((c: any) => ({
-    name: c.name,
-    identity: c.identity ?? "",
-    identityEn: c.identityEn ?? "",
-    firstEpisode: c.firstEpisode ?? byName.get(c.name) ?? ""
-  }));
+  const characterCount = Array.isArray(data?.characters) ? data.characters.length : 0;
 
   await prisma.analysisReport.create({
     data: {
       taskId,
-      summary: `识别 ${data.characters.length} 个角色`,
+      summary: characterCount > 0 ? `识别 ${characterCount} 个角色` : "未识别到角色",
       overallScore: null,
-      issues: data,
+      issues: issuesData,
       rawResponse: raw,
       costTokens: tokens
     }
